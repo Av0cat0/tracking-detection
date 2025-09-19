@@ -125,7 +125,8 @@ def find_best_match(self, detection: Dict, candidates: Dict) -> Optional[int]:
 
 **Scoring Weights:**
 
-$$\text{combined\_score} = 0.7 \times \text{iou} + 0.2 \times \text{distance\_score} + \text{label\_bonus}$$
+            combined_score = 0.7 * iou + 0.2 * distance_score + label_bonus
+
 
 - IoU: 70% (primary spatial overlap measure)
 - Distance: 20% (normalized distance penalty)
