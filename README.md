@@ -6,7 +6,7 @@ A multi-object tracking algorithm that assigns consistent object IDs across cons
 
 ### Prerequisites
 
-- Python 3.7+
+- Python 3.9+
 - Required packages: `pandas`, `numpy`, `opencv-python`, `matplotlib`
 
 ### Installation
@@ -122,41 +122,6 @@ The output TSV file includes all input columns plus:
 | `Q` | Quit viewer |
 | `S` | Save current view |
 
-## Troubleshooting
-
-### Common Issues
-
-**1. ModuleNotFoundError: No module named 'cv2'**
-```bash
-pip install opencv-python
-# or
-conda install opencv
-```
-
-**2. ModuleNotFoundError: No module named 'pandas'**
-```bash
-pip install pandas numpy
-# or
-conda install pandas numpy
-```
-
-**3. Python interpreter issues**
-If using conda environment:
-```bash
-/opt/anaconda3/envs/cv/bin/python interactive_viewer.py --tracker_file Roni_Roitbord_detections.tsv --images_dir images
-```
-
-**4. File not found errors**
-- Ensure input files exist in the correct directory
-- Check file paths are correct
-- Verify TSV file format matches expected structure
-
-### Performance Notes
-
-- **Processing time**: ~2-3 seconds for 484 frames
-- **Memory usage**: ~50-100MB for typical datasets
-- **Output size**: Typically 15-20% smaller than input (duplicates removed)
-
 ## Algorithm Parameters
 
 The tracking algorithm uses these key parameters (configurable in code):
@@ -189,5 +154,3 @@ The tracking algorithm uses these key parameters (configurable in code):
 ## Support
 
 For technical details and algorithm explanation, see `SOLUTION_DOCUMENTATION.md`.
-
-For issues or questions, refer to the troubleshooting section above.

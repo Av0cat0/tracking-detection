@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a comprehensive technical analysis of the object tracking solution developed for the Autobrains Data Engineering Home Assignment. The solution implements a multi-object tracking algorithm that assigns consistent object IDs across consecutive frames in a video sequence.
+The solution implements a multi-object tracking algorithm that assigns consistent object IDs across consecutive frames in a video sequence.
 
 ## Table of Contents
 
@@ -124,6 +124,9 @@ def find_best_match(self, detection: Dict, candidates: Dict) -> Optional[int]:
 ```
 
 **Scoring Weights:**
+
+$$\text{combined\_score} = 0.7 \cdot \text{IoU} + 0.2 \cdot \text{distance\_score} + \text{label\_bonus}$$
+
 - IoU: 70% (primary spatial overlap measure)
 - Distance: 20% (normalized distance penalty)
 - Label consistency: 10% (bonus for matching labels)
