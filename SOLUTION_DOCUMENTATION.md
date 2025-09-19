@@ -114,7 +114,7 @@ def find_best_match(self, detection: Dict, candidates: Dict) -> Optional[int]:
             distance_score = max(0, 1 - (distance / self.distance_threshold))
             label_bonus = 0.1 if detection['label'] == track_info['label'] else 0.0
             
-            combined_score = 0.7 * iou + 0.2 * distance_score + label_bonus
+            $$\text{combined\_score} = 0.7 \times \text{iou} + 0.2 \times \text{distance\_score} + \text{label\_bonus}$$
             
             if combined_score > best_score:
                 best_score = combined_score
