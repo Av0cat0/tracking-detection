@@ -312,6 +312,87 @@ class ObjectTracker:
         
         return filtered_detections
     
+    def fill_track_gaps(self, all_detections: List[Dict]) -> List[Dict]:
+        """
+        Fill gaps in tracks where objects should be visible but are missing.
+        
+        Args:
+            all_detections: List of all detections with object IDs
+            
+        Returns:
+            List of detections with gaps filled
+        """
+        # Convert to DataFrame for easier analysis
+        df = pd.DataFrame(all_detections)
+        
+        # Convert frame names to frame numbers
+        def frame_name_to_number(frame_name):
+            try:
+                return int(frame_name.split('-')[0])
+            except:
+                return 0
+        
+        df['frame_num'] = df['name'].apply(frame_name_to_number)
+        
+        # Create a mapping of frame numbers to frame names for efficiency
+        frame_name_map = {frame_name_to_number(name): name for name in df['name'].unique()}
+        
+        # Group by object_id to analyze each track
+        tracks = df.groupby('object_id')
+        filled_detections = []
+        
+        for obj_id, track_data in tracks:
+            frame_nums = sorted(track_data['frame_num'].unique())
+            
+            # Find gaps in the frame sequence
+            gaps = []
+            for i in range(len(frame_nums) - 1):
+                gap = frame_nums[i+1] - frame_nums[i]
+                if gap > 1:  # Gap of more than 1 frame
+                    gaps.append((frame_nums[i], frame_nums[i+1], gap))
+            
+            # Add original detections
+            filled_detections.extend(track_data.to_dict('records'))
+            
+            # Fill gaps
+            for gap_start, gap_end, gap_size in gaps:
+                # Get the detection before the gap
+                before_gap = track_data[track_data['frame_num'] == gap_start].iloc[0]
+                # Get the detection after the gap
+                after_gap = track_data[track_data['frame_num'] == gap_end].iloc[0]
+                
+                # Calculate movement per frame
+                frames_diff = gap_end - gap_start
+                x_movement = (after_gap['x_center'] - before_gap['x_center']) / frames_diff
+                y_movement = (after_gap['y_center'] - before_gap['y_center']) / frames_diff
+                width_movement = (after_gap['width'] - before_gap['width']) / frames_diff
+                height_movement = (after_gap['height'] - before_gap['height']) / frames_diff
+                
+                # Fill intermediate frames
+                for frame_offset in range(1, gap_size):
+                    frame_num = gap_start + frame_offset
+                    
+                    # Find the corresponding frame name
+                    frame_name = frame_name_map.get(frame_num)
+                    
+                    if frame_name is None:
+                        continue  # Skip if frame doesn't exist
+                    
+                    # Interpolate position and size
+                    interpolated_detection = {
+                        'name': frame_name,
+                        'x_center': before_gap['x_center'] + x_movement * frame_offset,
+                        'y_center': before_gap['y_center'] + y_movement * frame_offset,
+                        'width': before_gap['width'] + width_movement * frame_offset,
+                        'height': before_gap['height'] + height_movement * frame_offset,
+                        'label': before_gap['label'],
+                        'object_id': obj_id
+                    }
+                    
+                    filled_detections.append(interpolated_detection)
+        
+        return filled_detections
+    
     def cleanup_old_tracks(self, max_age: int = 25):
         """
         Remove tracks that haven't been seen for too long.
@@ -402,6 +483,14 @@ def process_detections(df: pd.DataFrame) -> pd.DataFrame:
     result_df = merge_duplicate_tracks(result_df)
     
     print(f"After merging duplicate tracks: {result_df['object_id'].nunique()} unique objects")
+    
+    # Fill gaps in tracks
+    print("Filling gaps in tracks...")
+    all_detections = result_df.to_dict('records')
+    filled_detections = tracker.fill_track_gaps(all_detections)
+    result_df = pd.DataFrame(filled_detections)
+    
+    print(f"After filling gaps: {len(result_df)} detections with {result_df['object_id'].nunique()} unique objects")
     
     return result_df
 
@@ -624,8 +713,8 @@ def main():
     parser = argparse.ArgumentParser(description='Object Tracking Algorithm')
     parser.add_argument('--input', '-i', default='detections.tsv', 
                        help='Input detections TSV file (default: detections.tsv)')
-    parser.add_argument('--output', '-o', default='Roni_Roitbord_detections.tsv',
-                       help='Output tracked detections TSV file (default: Roni_Roitbord_detections.tsv)')
+    parser.add_argument('--output', '-o', default='Roni_Roitbord_detections_complete.tsv',
+                       help='Output tracked detections TSV file (default: Roni_Roitbord_detections_complete.tsv)')
     
     args = parser.parse_args()
     

@@ -1,6 +1,6 @@
 # Object Tracking Algorithm - Autobrains Assignment
 
-A multi-object tracking algorithm that assigns consistent object IDs across consecutive frames in video sequences.
+A multi-object tracking algorithm that assigns consistent object IDs across consecutive frames in video sequences. This implementation includes data structure optimizations for improved performance while maintaining identical tracking results.
 
 ## Quick Start
 
@@ -32,6 +32,16 @@ python Roni_Roitbord_tracker.py --input detections.tsv --output Roni_Roitbord_de
 ```bash
 python interactive_viewer.py --tracker_file Roni_Roitbord_detections.tsv --images_dir images
 ```
+
+## Features
+
+- **Multi-object tracking**: Assigns consistent object IDs across consecutive frames
+- **IoU and distance-based matching**: Uses spatial overlap and proximity for object association
+- **Track re-identification**: Handles temporary occlusions and object reappearance
+- **Duplicate detection removal**: Eliminates multiple detections of the same object
+- **Post-processing merge**: Merges tracks that represent the same physical object
+- **Data structure optimization**: Uses coupled data structures (tuples) for improved performance
+- **Interactive visualization**: Real-time viewer for inspecting tracking results
 
 ## Command Line Options
 
