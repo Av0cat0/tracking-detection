@@ -60,4 +60,5 @@ images/
 
 # Keep essential data files but exclude large ones
 # detections.tsv
-# Roni_Roitbord_detections.tsv
+# Roni_Roitbord_detections.tsv*.pdf
+*.zip

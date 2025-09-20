@@ -60,41 +60,65 @@ class ObjectTracker:
         self.active_tracks = {}
         self.inactive_tracks = {}
         self.track_age = {}
-        self.max_track_age = 20
+        self.max_track_age = 25
 ```
 
 **Key Parameters:**
 - `iou_threshold`: Minimum IoU for spatial overlap (0.3)
 - `distance_threshold`: Maximum distance for matching (200px)
-- `max_track_age`: Frames before inactive track deletion (20)
+- `max_track_age`: Frames before inactive track deletion (25)
 
 ### 2. Intersection over Union (IoU) Calculation
 
 ```python
 def calculate_iou(self, box1: Dict, box2: Dict) -> float:
+    # Extract position and size from optimized format
+    x1, y1 = box1['pos']  # pos: (x, y) tuple
+    w1, h1 = box1['size']  # size: (width, height) tuple
+    x2, y2 = box2['pos']
+    w2, h2 = box2['size']
+    
     # Convert center coordinates to corner coordinates
-    x1_min = box1['center_x'] - box1['width'] / 2
-    x1_max = box1['center_x'] + box1['width'] / 2
-    # ... (similar for y coordinates and box2)
+    x1_min = x1 - w1 / 2
+    x1_max = x1 + w1 / 2
+    y1_min = y1 - h1 / 2
+    y1_max = y1 + h1 / 2
+    
+    x2_min = x2 - w2 / 2
+    x2_max = x2 + w2 / 2
+    y2_min = y2 - h2 / 2
+    y2_max = y2 + h2 / 2
     
     # Calculate intersection area
-    intersection_area = max(0, min(x1_max, x2_max) - max(x1_min, x2_min)) * \
-                       max(0, min(y1_max, y2_max) - max(y1_min, y2_min))
+    intersection_x_min = max(x1_min, x2_min)
+    intersection_x_max = min(x1_max, x2_max)
+    intersection_y_min = max(y1_min, y2_min)
+    intersection_y_max = min(y1_max, y2_max)
+    
+    if intersection_x_max <= intersection_x_min or intersection_y_max <= intersection_y_min:
+        return 0.0
+        
+    intersection_area = (intersection_x_max - intersection_x_min) * (intersection_y_max - intersection_y_min)
     
     # Calculate union area
-    union_area = area1 + area2 - intersection_area
+    box1_area = w1 * h1
+    box2_area = w2 * h2
+    union_area = box1_area + box2_area - intersection_area
     
     return intersection_area / union_area if union_area > 0 else 0.0
 ```
 
-**Purpose**: Measures spatial overlap between bounding boxes (0-1 scale)
+**Purpose**: Measures spatial overlap between bounding boxes (0-1 scale) using optimized data structure
 
 ### 3. Distance Calculation
 
 ```python
 def calculate_distance(self, box1: Dict, box2: Dict) -> float:
-    return np.sqrt((box1['center_x'] - box2['center_x'])**2 + 
-                   (box1['center_y'] - box2['center_y'])**2)
+    x1, y1 = box1['pos']  # pos: (x, y) tuple
+    x2, y2 = box2['pos']
+    dx = x1 - x2
+    dy = y1 - y2
+    return np.sqrt(dx * dx + dy * dy)
 ```
 
 **Purpose**: Euclidean distance between bounding box centers
@@ -107,11 +131,14 @@ def find_best_match(self, detection: Dict, candidates: Dict) -> Optional[int]:
     best_score = 0.0
     
     for track_id, track_info in candidates.items():
+        # Calculate IoU using optimized format
         iou = self.calculate_iou(detection, track_info)
         distance = self.calculate_distance(detection, track_info)
         
         if iou >= self.iou_threshold and distance <= self.distance_threshold:
+            # Normalize distance to 0-1 range (closer is better)
             distance_score = max(0, 1 - (distance / self.distance_threshold))
+            # Label consistency bonus
             label_bonus = 0.1 if detection['label'] == track_info['label'] else 0.0
             
             combined_score = 0.7 * iou + 0.2 * distance_score + label_bonus
@@ -236,10 +263,6 @@ SOLUTION IMPLEMENTED:
 - Label compatibility checking (CAR/TRUCK/VEHICLE)
 - Spatial overlap detection tuning (IoU > 0.3)
 - Keep larger bounding box when duplicates found
-
-RESULT:
-- 17.9% overall duplicate reduction achieved
-- Consistent object IDs maintained across frames
 ```
 
 ## Performance Analysis
@@ -256,7 +279,131 @@ RESULT:
 ### Algorithm Efficiency
 
 **Time Complexity**: O(n²) per frame for duplicate removal, O(n) for tracking
+
 **Space Complexity**: O(n) for storing active/inactive tracks
+
+## Algorithm Flow Example
+
+To better understand how the tracking algorithm works, let's walk through a concrete example with a car being tracked across multiple frames.
+
+### Scenario Setup
+We have a car that appears in frames 1-5, gets occluded in frame 3, and reappears in frame 4. The detection algorithm may also create duplicate detections.
+
+### Step-by-Step Execution
+
+#### **Frame 1: Initial Detection**
+```
+Input Detection: {'name': 'frame_001.png', 'x_center': 100, 'y_center': 200, 'width': 50, 'height': 30, 'label': 'CAR'}
+
+Algorithm Steps:
+1. Convert to optimized format: {'pos': (100, 200), 'size': (50, 30), 'label': 'CAR'}
+2. No existing tracks → Create new track
+3. Assign object_id = 1
+4. Add to active_tracks
+
+Result: Track ID=1 created, position (100, 200)
+```
+
+#### **Frame 2: Successful Match**
+```
+Input Detection: {'name': 'frame_002.png', 'x_center': 105, 'y_center': 200, 'width': 50, 'height': 30, 'label': 'CAR'}
+
+Algorithm Steps:
+1. Convert to optimized format: {'pos': (105, 200), 'size': (50, 30), 'label': 'CAR'}
+2. Calculate IoU with Track ID=1: IoU = 0.85 (high overlap)
+3. Calculate distance: 5 pixels (small movement)
+4. Combined score: 0.7 × 0.85 + 0.2 × 0.95 + 0.1 = 0.895
+5. Score > threshold → Match to Track ID=1
+6. Update track position to (105, 200)
+7. Reset track age to 0
+
+Result: Track ID=1 continues, position updated
+```
+
+#### **Frame 3: Occlusion (No Detection)**
+```
+Input Detection: None (car is occluded)
+
+Algorithm Steps:
+1. No detections to match
+2. Track ID=1 has no match → move to inactive_tracks
+3. Increment track age to 1
+4. Track remains available for re-identification
+
+Result: Track ID=1 becomes inactive, age = 1
+```
+
+#### **Frame 4: Re-identification**
+```
+Input Detection: {'name': 'frame_004.png', 'x_center': 115, 'y_center': 200, 'width': 50, 'height': 30, 'label': 'CAR'}
+
+Algorithm Steps:
+1. Convert to optimized format: {'pos': (115, 200), 'size': (50, 30), 'label': 'CAR'}
+2. Check inactive tracks for re-identification
+3. Calculate IoU with Track ID=1: IoU = 0.75 (good overlap)
+4. Calculate distance: 10 pixels (reasonable movement)
+5. Combined score: 0.7 × 0.75 + 0.2 × 0.90 + 0.1 = 0.815
+6. Score > threshold → Reactivate Track ID=1
+7. Move back to active_tracks
+8. Reset track age to 0
+
+Result: Track ID=1 reactivated, position (115, 200)
+```
+
+#### **Frame 5: Duplicate Detection**
+```
+Input Detections: 
+- Detection A: {'x_center': 120, 'y_center': 200, 'width': 50, 'height': 30, 'label': 'CAR'}
+- Detection B: {'x_center': 122, 'y_center': 201, 'width': 48, 'height': 29, 'label': 'CAR'}
+
+Algorithm Steps:
+1. Convert to optimized format:
+   - Detection A: {'pos': (120, 200), 'size': (50, 30), 'label': 'CAR'}
+   - Detection B: {'pos': (122, 201), 'size': (48, 29), 'label': 'CAR'}
+2. Remove duplicates within frame:
+   - IoU between A and B: 0.85 (high overlap)
+   - Distance: 2.2 pixels (very close)
+   - Both have same label (works well when the labels are different but from the same group such as CAR and TRUCK) → Duplicates detected
+   - Keep Detection A (larger bounding box)
+3. Match Detection A to Track ID=1:
+   - IoU: 0.80, Distance: 5 pixels
+   - Combined score: 0.7 × 0.80 + 0.2 × 0.95 + 0.1 = 0.860
+   - Match successful
+4. Update Track ID=1 position to (120, 200)
+
+Result: Track ID=1 continues, duplicates removed
+```
+
+### Key Algorithm Decisions
+
+#### **Why Track ID=1 was maintained:**
+1. **Spatial Continuity**: IoU consistently > 0.7 across frames
+2. **Temporal Proximity**: Small position changes between frames
+3. **Label Consistency**: All detections labeled as 'CAR'
+4. **Re-identification**: Algorithm found the track after occlusion
+
+#### **Why Duplicates were Removed:**
+1. **High IoU**: 0.85 overlap between detections
+2. **Close Distance**: 2.2 pixels apart (Hypotenuse in Pythagorean triangle)
+3. **Same Label**: Both 'CAR' detections
+4. **Larger Box**: Kept the detection with bigger bounding box
+
+#### **Why No New Track was Created:**
+1. **Existing Match**: Track ID=1 was always the best match
+2. **Score Threshold**: Combined scores exceeded matching threshold
+3. **Temporal Logic**: Algorithm prioritized existing tracks over new ones
+
+### Final Result
+```
+Frame 1: Car detected → Track ID=1 created
+Frame 2: Car moves → Track ID=1 updated  
+Frame 3: Car occluded → Track ID=1 inactive
+Frame 4: Car reappears → Track ID=1 reactivated
+Frame 5: Car continues → Track ID=1 maintained, duplicates removed
+
+```
+
+This example demonstrates how the algorithm handles the core challenges of object tracking: maintaining identity across frames, dealing with temporary occlusions, and removing duplicate detections.
 
 **Key Optimizations**:
 1. Early termination in duplicate detection
@@ -313,15 +460,65 @@ Roni_Roitbord_tracker.py
 
 ## Data Structure Optimization
 
-**Motivation**: The original tracking algorithm stores bounding box coordinates as separate fields (`center_x`, `center_y`, `width`, `height`), which requires multiple memory accesses and creates scattered data patterns. Since these values are always accessed together for spatial calculations, coupling them into tuples can improve cache locality and reduce memory overhead.
+**Motivation**: The original tracking algorithm stores bounding box coordinates as separate fields (`x_center`, `y_center`, `width`, `height`), which requires multiple memory accesses and creates scattered data patterns. Since these values are always accessed together for spatial calculations, coupling them into tuples can improve cache locality and reduce memory overhead.
 
-**Implementation**: The optimized version uses coupled data structures with tuples for position (`pos: (x, y)`) and size (`size: (width, height)`). This approach groups related data that is always accessed together, reducing the number of dictionary lookups and improving memory access patterns. 
+**Implementation**: The optimized version uses coupled data structures with tuples for position (`pos: (x, y)`) and size (`size: (width, height)`). This approach groups related data that is always accessed together, reducing the number of dictionary lookups and improving memory access patterns.
 
+### Data Structure Conversion Process
+
+**Input Format (External Interface):**
+```python
+detection = {
+    'name': 'frame_001.png',
+    'x_center': 100,      # Original format
+    'y_center': 200,      # Original format  
+    'width': 50,          # Original format
+    'height': 30,         # Original format
+    'label': 'CAR'
+}
+```
+
+**Internal Processing (Optimized Format):**
+```python
+def _convert_to_optimized(self, detection: Dict) -> Dict:
+    optimized = detection.copy()
+    optimized['pos'] = (detection['x_center'], detection['y_center'])
+    optimized['size'] = (detection['width'], detection['height'])
+    # Remove individual fields to avoid confusion
+    del optimized['x_center']
+    del optimized['y_center']
+    del optimized['width']
+    del optimized['height']
+    return optimized
+
+# Result:
+optimized = {
+    'name': 'frame_001.png',
+    'pos': (100, 200),    # Coupled position tuple
+    'size': (50, 30),     # Coupled size tuple
+    'label': 'CAR'
+}
+```
+
+**Output Format (Back to Original):**
+```python
+def _convert_from_optimized(self, detection: Dict) -> Dict:
+    original = detection.copy()
+    original['x_center'] = detection['pos'][0]
+    original['y_center'] = detection['pos'][1]
+    original['width'] = detection['size'][0]
+    original['height'] = detection['size'][1]
+    # Remove optimized fields
+    del original['pos']
+    del original['size']
+    return original
+```
 
 **Benefits Achieved**:
 - **Improved cache locality**: Related data stored together reduces cache misses
 - **Reduced memory access overhead**: Fewer dictionary lookups for spatial calculations  
 - **Better memory efficiency**: Tuple storage is more compact than separate dictionary entries
+- **Maintained compatibility**: External interfaces still use original format
 
 
 ## Future Improvements

@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""
-Object Tracking Algorithm for Autobrains Data Engineering Assignment
-Author: Roni Levi
-
-This script implements a multi-object tracking algorithm that assigns consistent
-object IDs across consecutive frames based on bounding box overlap and distance.
-"""
-
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Tuple, Optional
@@ -17,11 +9,7 @@ import os
 class ObjectTracker:
     """
     Multi-object tracker that maintains consistent object IDs across frames.
-    
-    Uses IoU (Intersection over Union) and distance-based matching to associate
-    detections between consecutive frames.
-    
-    OPTIMIZED: Uses efficient data structures with coupled variables (pos, size).
+    Uses IoU and distance-based matching to associate detections between consecutive frames.
     """
     
     def __init__(self, iou_threshold: float = 0.3, distance_threshold: float = 200.0):
@@ -36,27 +24,26 @@ class ObjectTracker:
         self.distance_threshold = distance_threshold
         self.next_object_id = 1
         self.active_tracks: Dict[int, Dict] = {}
-        self.track_history: List[Dict] = []
         self.inactive_tracks: Dict[int, Dict] = {}  # Store recently lost tracks
         self.track_age: Dict[int, int] = {}  # Track how long each track has been missing
-        self.max_track_age = 20  # Maximum frames a track can be missing before being deleted
+        self.max_track_age = 25  # Maximum frames a track can be missing before being deleted
         
     def _convert_to_optimized(self, detection: Dict) -> Dict:
         """
         Convert detection to optimized format with coupled data structures.
         
         Args:
-            detection: Original detection with 'center_x', 'center_y', 'width', 'height'
+            detection: Original detection with 'x_center', 'y_center', 'width', 'height'
             
         Returns:
             Optimized detection with 'pos', 'size' tuples
         """
         optimized = detection.copy()
-        optimized['pos'] = (detection['center_x'], detection['center_y'])
+        optimized['pos'] = (detection['x_center'], detection['y_center'])
         optimized['size'] = (detection['width'], detection['height'])
         # Remove individual fields to avoid confusion
-        del optimized['center_x']
-        del optimized['center_y']
+        del optimized['x_center']
+        del optimized['y_center']
         del optimized['width']
         del optimized['height']
         return optimized
@@ -69,11 +56,11 @@ class ObjectTracker:
             detection: Optimized detection with 'pos', 'size' tuples
             
         Returns:
-            Original detection with 'center_x', 'center_y', 'width', 'height'
+            Original detection with 'x_center', 'y_center', 'width', 'height'
         """
         original = detection.copy()
-        original['center_x'] = detection['pos'][0]
-        original['center_y'] = detection['pos'][1]
+        original['x_center'] = detection['pos'][0]
+        original['y_center'] = detection['pos'][1]
         original['width'] = detection['size'][0]
         original['height'] = detection['size'][1]
         # Remove optimized fields
@@ -83,7 +70,7 @@ class ObjectTracker:
         
     def calculate_iou(self, box1: Dict, box2: Dict) -> float:
         """
-        Calculate Intersection over Union (IoU) between two bounding boxes.
+        Calculate IoU between two bounding boxes.
         
         Args:
             box1, box2: Dictionaries with keys 'pos', 'size' (optimized format)
@@ -248,12 +235,6 @@ class ObjectTracker:
                 del self.inactive_tracks[track_id]
                 del self.track_age[track_id]
         
-        # Duplicate removal already done at the beginning with optimized format
-        
-        # Store track history
-        for detection in matched_detections:
-            self.track_history.append(detection.copy())
-        
         return matched_detections
     
     def remove_duplicates_in_frame(self, detections: List[Dict]) -> List[Dict]:
@@ -311,17 +292,6 @@ class ObjectTracker:
                 filtered_detections.append(detection)
         
         return filtered_detections
-    
-    def cleanup_old_tracks(self, max_age: int = 25):
-        """
-        Remove tracks that haven't been seen for too long.
-        
-        Args:
-            max_age: Maximum number of frames a track can be missing
-        """
-        # For simplicity, we'll keep all tracks active
-        # In a more sophisticated implementation, we could track frame counts
-        pass
 
 
 def load_detections(file_path: str) -> pd.DataFrame:
@@ -368,30 +338,20 @@ def process_detections(df: pd.DataFrame) -> pd.DataFrame:
         for _, row in frame_detections.iterrows():
             detection = {
                 'name': row['name'],
-                'center_x': row['x_center'],
-                'center_y': row['y_center'],
+                'x_center': row['x_center'],
+                'y_center': row['y_center'],
                 'width': row['width'],
                 'height': row['height'],
                 'label': row['label']
             }
             detections.append(detection)
         
-        # Update tracks
+        # Update tracks (will handle internal conversion to optimized format)
         tracked_detections = tracker.update_tracks(detections)
         all_tracked_detections.extend(tracked_detections)
     
     # Convert back to DataFrame
     result_df = pd.DataFrame(all_tracked_detections)
-    
-    # Rename columns to match expected output format
-    result_df = result_df.rename(columns={
-        'center_x': 'x_center',
-        'center_y': 'y_center',
-        'width': 'width',
-        'height': 'height',
-        'label': 'label',
-        'object_id': 'object_id'
-    })
     
     # Reorder columns to match expected format
     result_df = result_df[['name', 'x_center', 'y_center', 'width', 'height', 'label', 'object_id']]

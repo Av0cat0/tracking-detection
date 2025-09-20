@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""
-Object Tracking Algorithm for Autobrains Data Engineering Assignment
-Author: Roni Levi
-
-This script implements a multi-object tracking algorithm that assigns consistent
-object IDs across consecutive frames based on bounding box overlap and distance.
-"""
 
 import pandas as pd
 import numpy as np
@@ -36,10 +29,9 @@ class ObjectTracker:
         self.distance_threshold = distance_threshold
         self.next_object_id = 1
         self.active_tracks: Dict[int, Dict] = {}
-        self.track_history: List[Dict] = []
         self.inactive_tracks: Dict[int, Dict] = {}  # Store recently lost tracks
         self.track_age: Dict[int, int] = {}  # Track how long each track has been missing
-        self.max_track_age = 20  # Maximum frames a track can be missing before being deleted
+        self.max_track_age = 25  # Maximum frames a track can be missing before being deleted
         
     def _convert_to_optimized(self, detection: Dict) -> Dict:
         """
@@ -243,16 +235,12 @@ class ObjectTracker:
         # Age inactive tracks
         for track_id in list(self.track_age.keys()):
             self.track_age[track_id] += 1
-            if self.track_age[track_id] > self.max_track_age:
-                # Remove old inactive tracks
-                del self.inactive_tracks[track_id]
-                del self.track_age[track_id]
+        
+        # Clean up old tracks
+        self.cleanup_old_tracks()
         
         # Duplicate removal already done at the beginning with optimized format
         
-        # Store track history
-        for detection in matched_detections:
-            self.track_history.append(detection.copy())
         
         return matched_detections
     
@@ -392,17 +380,6 @@ class ObjectTracker:
                     filled_detections.append(interpolated_detection)
         
         return filled_detections
-    
-    def cleanup_old_tracks(self, max_age: int = 25):
-        """
-        Remove tracks that haven't been seen for too long.
-        
-        Args:
-            max_age: Maximum number of frames a track can be missing
-        """
-        # For simplicity, we'll keep all tracks active
-        # In a more sophisticated implementation, we could track frame counts
-        pass
 
 
 def load_detections(file_path: str) -> pd.DataFrame:
