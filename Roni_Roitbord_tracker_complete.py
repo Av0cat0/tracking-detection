@@ -236,11 +236,8 @@ class ObjectTracker:
         for track_id in list(self.track_age.keys()):
             self.track_age[track_id] += 1
         
-        # Clean up old tracks
-        self.cleanup_old_tracks()
         
         # Duplicate removal already done at the beginning with optimized format
-        
         
         return matched_detections
     
