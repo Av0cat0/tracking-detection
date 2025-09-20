@@ -163,7 +163,7 @@ def find_best_match(self, detection: Dict, candidates: Dict) -> Optional[int]:
 
 ### Issue 1: Duplicate Object Detection
 
-**Problem**: Same car detected with different IDs (ID:1 and ID:53).
+**Problem**: Same car detected with different IDs.
 
 **Root Cause**: 
 - Temporal gaps in tracking
